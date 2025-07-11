@@ -1,0 +1,14 @@
+# Python byte-compiled files
+__pycache__/
+
+# Model data - usually large files
+model_data/
+
+# Virtual environment folders
+.venv/
+venv/
+env/
+
+# IDE/Editor specific settings
+.vscode/
+.idea/ 
