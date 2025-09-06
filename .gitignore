@@ -11,4 +11,12 @@ env/
 
 # IDE/Editor specific settings
 .vscode/
-.idea/ 
+.idea/
+
+# Bỏ toàn bộ thư mục phụ thuộc Node.js
+node_modules/
+
+.env
+certs1/192.168.0.104-key.pem
+certs1/192.168.0.104.pem
+package-lock.json

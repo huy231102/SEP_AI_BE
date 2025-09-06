@@ -5,4 +5,5 @@ websockets
 numpy
 opencv-python
 scikit-learn
-mediapipe 
+mediapipe
+python-dotenv 

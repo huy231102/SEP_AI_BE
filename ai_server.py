@@ -5,9 +5,12 @@ import numpy as np
 import pickle
 import mediapipe as mp
 import os
+import ssl
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from collections import Counter
+from dotenv import load_dotenv
+load_dotenv()
 
 app = FastAPI()
 
@@ -17,11 +20,11 @@ CORS_ALLOWED_ORIGINS = ["*"]
 HOST = "0.0.0.0"
 PORT = 8001
 # Ngưỡng tin cậy tối thiểu để một dự đoán được xem xét
-CONFIDENCE_THRESHOLD = 0.01
+CONFIDENCE_THRESHOLD = 0.35
 # Số lượng dự đoán gần nhất trong lịch sử để xem xét tính ổn định
-PREDICTION_HISTORY_SIZE = 1
+PREDICTION_HISTORY_SIZE = 5
 # Số lần một ký tự phải xuất hiện trong lịch sử để được coi là "ổn định"
-STABILITY_THRESHOLD = 1
+STABILITY_THRESHOLD = 3
 
 
 # Cấu hình CORS để cho phép client từ React kết nối vào
@@ -73,10 +76,12 @@ try:
 
     # Khởi tạo MediaPipe Hands
     mp_hands = mp.solutions.hands
+    # Dùng static_image_mode=False để detector chạy 1 lần rồi tracking → nhanh hơn
     hands = mp_hands.Hands(
-        static_image_mode=True,
+        static_image_mode=False,
         max_num_hands=1,
-        min_detection_confidence=0.5
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
     )
 except Exception as e:
     print(f"Lỗi khi khởi tạo AI: {e}")
@@ -161,6 +166,9 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     prediction_history = []
     last_sent_char = None
+    import time
+    MIN_INTERVAL = 0.15  # giãn cách tối thiểu giữa 2 lần infer (≈6-7fps)
+    last_infer = 0
     try:
         while True:
             data = await websocket.receive_text()
@@ -176,6 +184,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 # Đọc ảnh từ mảng numpy bằng OpenCV
                 img_np = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+                # Giới hạn tốc độ suy luận
+                now = time.time()
+                if now - last_infer < MIN_INTERVAL:
+                    continue
+                last_infer = now
 
                 # --- Gọi hàm xử lý AI ---
                 prediction = predict_sign_language(img_np)
@@ -219,5 +233,21 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    # Chạy server với uvicorn trên host và port đã cấu hình
-    uvicorn.run(app, host=HOST, port=PORT) 
+    # Đọc đường dẫn file SSL từ biến môi trường hoặc default vào thư mục certs
+    certfile = os.environ.get("SSL_CRT_FILE") or os.environ.get("SSL_CERT_PATH") or "certs/cert.pem"
+    keyfile = os.environ.get("SSL_KEY_FILE") or os.environ.get("SSL_KEY_PATH") or "certs/key.pem"
+    ssl_args = {}
+    # Nếu cả hai file tồn tại thì tạo SSLContext và hạ SecLevel
+    if os.path.exists(certfile) and os.path.exists(keyfile):
+        print(f"Running with HTTPS using certs at {certfile} and {keyfile}")
+        uvicorn.run(
+            app,
+            host=HOST,
+            port=PORT,
+            ssl_certfile=certfile,
+            ssl_keyfile=keyfile,
+            ssl_ciphers="DEFAULT:@SECLEVEL=1",
+        )
+    else:
+        print(f"Warning: SSL files not found at {certfile} and {keyfile}, running without SSL")
+        uvicorn.run(app, host=HOST, port=PORT) 

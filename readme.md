@@ -25,6 +25,28 @@ python ai_server.py
 ```
 Mặc định server sẽ chạy ở `http://localhost:8000` (hoặc cổng được chỉ định trong mã).
 
+## Tạo SSL Self-signed Certificate
+
+Để chạy server với HTTPS, bạn cần tự tạo chứng chỉ (cert.pem) và private key (key.pem). Mình đã cung cấp script sau `generate_certs.sh`:
+
+```bash
+# Chạy script để sinh tự động certs vào thư mục certs/
+bash generate_certs.sh
+```
+
+Script sẽ tạo:
+- `certs/key.pem` (private key)
+- `certs/cert.pem` (public certificate)
+
+Bước kế tiếp, chạy server AI-BE như sau (hoặc đặt biến môi trường nếu cần đường dẫn tuỳ chỉnh):
+
+```bash
+# Nếu cần tuỳ chỉnh đường dẫn certs
+env SSL_CERT_PATH="certs/cert.pem" SSL_KEY_PATH="certs/key.pem" python ai_server.py
+```
+
+Nếu không tìm thấy file, server sẽ cảnh báo và chạy HTTP (không SSL).
+
 ## Cấu trúc thư mục
 - `ai_server.py`: Tệp chính khởi chạy server.
 - `model_data/`: Chứa các tệp mô hình đã huấn luyện.
