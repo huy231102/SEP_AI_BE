@@ -120,19 +120,20 @@ def extract_features(landmarks):
     
     return np.array(data)
 
-def predict_sign_language(image_np):
+def predict_sign_language(image_np, hands_instance=None):
     """
     Hàm xử lý ảnh và dịch ngôn ngữ ký hiệu.
     Trả về một tuple (ký tự dự đoán, độ tin cậy) nếu hợp lệ,
     ngược lại trả về None.
     """
-    if model is None or hands is None or not labels:
+    hands_to_use = hands_instance or hands
+    if model is None or hands_to_use is None or not labels:
         print("Lỗi: Mô hình AI chưa được tải.")
         return None
 
     # Chuyển ảnh sang RGB vì MediaPipe yêu cầu
     image_rgb = cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB)
-    results = hands.process(image_rgb)
+    results = hands_to_use.process(image_rgb)
 
     if results.multi_hand_landmarks:
         for hand_landmarks in results.multi_hand_landmarks:
@@ -164,6 +165,13 @@ def predict_sign_language(image_np):
 @app.websocket("/ws/translate")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
+    # Khởi tạo Hands riêng cho từng client
+    hands_instance = mp.solutions.hands.Hands(
+        static_image_mode=False,
+        max_num_hands=1,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5,
+    )
     prediction_history = []
     last_sent_char = None
     import time
@@ -192,7 +200,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 last_infer = now
 
                 # --- Gọi hàm xử lý AI ---
-                prediction = predict_sign_language(img_np)
+                prediction = predict_sign_language(img_np, hands_instance)
                 # -------------------------
 
                 if prediction:
@@ -230,6 +238,9 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"Error: {e}")
         manager.disconnect(websocket)
+    finally:
+        # Đảm bảo giải phóng tài nguyên MediaPipe
+        hands_instance.close()
 
 if __name__ == "__main__":
     import uvicorn
